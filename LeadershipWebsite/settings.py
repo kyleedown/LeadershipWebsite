@@ -39,6 +39,7 @@ INSTALLED_APPS = [
     "django.contrib.staticfiles",
     "content",
     "quizzes",
+    'django_summernote',
 ]
 
 MIDDLEWARE = [
