@@ -1,8 +1,10 @@
 asgiref==3.11.1
 bleach==6.3.0
+dj-database-url==2.3.0
 Django==6.0.3
 django-summernote==0.8.20.0
 gunicorn==23.0.0
+psycopg2-binary==2.9.10
 sqlparse==0.5.5
 webencodings==0.5.1
 whitenoise==6.8.2
