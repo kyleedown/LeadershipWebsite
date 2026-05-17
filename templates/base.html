@@ -71,6 +71,21 @@
                     <li class="nav-item">
                         <a class="nav-link" href="/quizzes/">Quizzes</a>
                     </li>
+                    {% if user.is_authenticated %}
+                    <li class="nav-item">
+                        <span class="nav-link text-white opacity-75">{{ user.username }}</span>
+                    </li>
+                    <li class="nav-item">
+                        <form method="post" action="{% url 'logout' %}" class="d-inline">
+                            {% csrf_token %}
+                            <button type="submit" class="btn btn-link nav-link p-0">Log Out</button>
+                        </form>
+                    </li>
+                    {% else %}
+                    <li class="nav-item">
+                        <a class="nav-link" href="{% url 'login' %}">Log In</a>
+                    </li>
+                    {% endif %}
                 </ul>
             </div>
         </div>

@@ -49,6 +49,7 @@ INSTALLED_APPS = [
     "django.contrib.staticfiles",
     "content",
     "quizzes",
+    "accounts",
     'django_summernote',
 ]
 
@@ -138,3 +139,14 @@ MEDIA_ROOT = BASE_DIR
 
 # Default primary key field type
 DEFAULT_AUTO_FIELD = "django.db.models.BigAutoField"
+
+# Auth redirects
+LOGIN_REDIRECT_URL = "/"       # where to go after a successful login
+LOGOUT_REDIRECT_URL = "/"      # where to go after logout
+
+# Email — use console backend locally; override via EMAIL_BACKEND env var in production
+EMAIL_BACKEND = os.environ.get(
+    "EMAIL_BACKEND",
+    "django.core.mail.backends.console.EmailBackend",
+)
+DEFAULT_FROM_EMAIL = os.environ.get("DEFAULT_FROM_EMAIL", "noreply@leadershipstudies.com")

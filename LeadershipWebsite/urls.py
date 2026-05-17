@@ -27,4 +27,8 @@ urlpatterns = [
     path("articles/", include("content.urls")),
     path("quizzes/", include("quizzes.urls")),
     path('summernote/', include('django_summernote.urls')),
+    path("accounts/", include("accounts.urls")),
+    # Django's built-in auth views: login, logout, password change/reset, etc.
+    # Login lives at /accounts/login/  and logout at /accounts/logout/
+    path("accounts/", include("django.contrib.auth.urls")),
 ] + static(settings.MEDIA_URL, document_root=settings.MEDIA_ROOT)
