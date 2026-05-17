@@ -1,8 +1,9 @@
 from django.contrib.auth.models import User
+from django.contrib.messages import get_messages
 from django.test import TestCase
 from django.urls import reverse
 
-from .forms import RegistrationForm
+from .forms import ProfileForm, RegistrationForm
 from .models import UserProfile
 
 
@@ -163,3 +164,217 @@ class RegisterViewTests(TestCase):
         self.assertEqual(response.status_code, 200)
         self.assertTemplateUsed(response, "registration/register.html")
         self.assertFalse(response.context["form"].is_valid())
+
+
+class ProfileFormTests(TestCase):
+
+    def setUp(self):
+        self.user = User.objects.create_user("testuser", "test@example.com", "Testpass123!")
+
+    def _valid_data(self):
+        return {
+            "username": "testuser",
+            "email": "test@example.com",
+            "current_password": "Testpass123!",
+        }
+
+    def test_valid_form_is_valid(self):
+        form = ProfileForm(data=self._valid_data(), instance=self.user, user=self.user)
+        self.assertTrue(form.is_valid(), form.errors)
+
+    def test_wrong_password_makes_form_invalid(self):
+        data = self._valid_data()
+        data["current_password"] = "wrongpassword"
+        form = ProfileForm(data=data, instance=self.user, user=self.user)
+        self.assertFalse(form.is_valid())
+        self.assertIn("current_password", form.errors)
+
+    def test_invalid_email_rejected(self):
+        data = self._valid_data()
+        data["email"] = "not-an-email"
+        form = ProfileForm(data=data, instance=self.user, user=self.user)
+        self.assertFalse(form.is_valid())
+        self.assertIn("email", form.errors)
+
+    def test_blank_username_rejected(self):
+        data = self._valid_data()
+        data["username"] = ""
+        form = ProfileForm(data=data, instance=self.user, user=self.user)
+        self.assertFalse(form.is_valid())
+        self.assertIn("username", form.errors)
+
+
+class ProfileViewTests(TestCase):
+
+    def setUp(self):
+        self.user = User.objects.create_user("testuser", "test@example.com", "Testpass123!")
+
+    def test_get_requires_login(self):
+        response = self.client.get(reverse("profile"))
+        self.assertRedirects(
+            response,
+            f"{reverse('login')}?next={reverse('profile')}",
+            fetch_redirect_response=False,
+        )
+
+    def test_get_returns_200_when_logged_in(self):
+        self.client.force_login(self.user)
+        response = self.client.get(reverse("profile"))
+        self.assertEqual(response.status_code, 200)
+
+    def test_get_uses_correct_template(self):
+        self.client.force_login(self.user)
+        response = self.client.get(reverse("profile"))
+        self.assertTemplateUsed(response, "registration/profile.html")
+
+    def test_get_form_prefilled_with_user_data(self):
+        self.client.force_login(self.user)
+        response = self.client.get(reverse("profile"))
+        form = response.context["form"]
+        self.assertEqual(form["username"].value(), "testuser")
+        self.assertEqual(form["email"].value(), "test@example.com")
+
+    def test_valid_post_updates_username(self):
+        self.client.force_login(self.user)
+        self.client.post(reverse("profile"), {
+            "username": "newusername",
+            "email": "test@example.com",
+            "current_password": "Testpass123!",
+        })
+        self.user.refresh_from_db()
+        self.assertEqual(self.user.username, "newusername")
+
+    def test_valid_post_updates_email(self):
+        self.client.force_login(self.user)
+        self.client.post(reverse("profile"), {
+            "username": "testuser",
+            "email": "new@example.com",
+            "current_password": "Testpass123!",
+        })
+        self.user.refresh_from_db()
+        self.assertEqual(self.user.email, "new@example.com")
+
+    def test_valid_post_redirects_to_profile(self):
+        self.client.force_login(self.user)
+        response = self.client.post(reverse("profile"), {
+            "username": "testuser",
+            "email": "test@example.com",
+            "current_password": "Testpass123!",
+        })
+        self.assertRedirects(response, reverse("profile"))
+
+    def test_valid_post_adds_success_message(self):
+        self.client.force_login(self.user)
+        response = self.client.post(reverse("profile"), {
+            "username": "testuser",
+            "email": "test@example.com",
+            "current_password": "Testpass123!",
+        })
+        msgs = list(get_messages(response.wsgi_request))
+        self.assertEqual(len(msgs), 1)
+        self.assertIn("updated", str(msgs[0]))
+
+    def test_wrong_password_rerenders_form(self):
+        self.client.force_login(self.user)
+        response = self.client.post(reverse("profile"), {
+            "username": "testuser",
+            "email": "test@example.com",
+            "current_password": "wrongpassword",
+        })
+        self.assertEqual(response.status_code, 200)
+        self.assertIn("current_password", response.context["form"].errors)
+
+    def test_wrong_password_does_not_update_user(self):
+        self.client.force_login(self.user)
+        self.client.post(reverse("profile"), {
+            "username": "newusername",
+            "email": "test@example.com",
+            "current_password": "wrongpassword",
+        })
+        self.user.refresh_from_db()
+        self.assertEqual(self.user.username, "testuser")
+
+    def test_duplicate_username_is_rejected(self):
+        User.objects.create_user("takenuser", "taken@example.com", "Testpass123!")
+        self.client.force_login(self.user)
+        response = self.client.post(reverse("profile"), {
+            "username": "takenuser",
+            "email": "test@example.com",
+            "current_password": "Testpass123!",
+        })
+        self.assertEqual(response.status_code, 200)
+        self.assertIn("username", response.context["form"].errors)
+        self.user.refresh_from_db()
+        self.assertEqual(self.user.username, "testuser")
+
+
+class PasswordChangeViewTests(TestCase):
+
+    def setUp(self):
+        self.user = User.objects.create_user("testuser", "test@example.com", "Testpass123!")
+
+    def test_get_requires_login(self):
+        response = self.client.get(reverse("password_change"))
+        self.assertRedirects(
+            response,
+            f"{reverse('login')}?next={reverse('password_change')}",
+            fetch_redirect_response=False,
+        )
+
+    def test_get_returns_200_when_logged_in(self):
+        self.client.force_login(self.user)
+        response = self.client.get(reverse("password_change"))
+        self.assertEqual(response.status_code, 200)
+
+    def test_get_uses_correct_template(self):
+        self.client.force_login(self.user)
+        response = self.client.get(reverse("password_change"))
+        self.assertTemplateUsed(response, "registration/password_change_form.html")
+
+    def test_valid_post_changes_password(self):
+        self.client.force_login(self.user)
+        self.client.post(reverse("password_change"), {
+            "old_password": "Testpass123!",
+            "new_password1": "Newpass456!",
+            "new_password2": "Newpass456!",
+        })
+        self.user.refresh_from_db()
+        self.assertTrue(self.user.check_password("Newpass456!"))
+
+    def test_valid_post_redirects_to_done(self):
+        self.client.force_login(self.user)
+        response = self.client.post(reverse("password_change"), {
+            "old_password": "Testpass123!",
+            "new_password1": "Newpass456!",
+            "new_password2": "Newpass456!",
+        })
+        self.assertRedirects(response, reverse("password_change_done"))
+
+    def test_done_page_returns_200(self):
+        self.client.force_login(self.user)
+        response = self.client.get(reverse("password_change_done"))
+        self.assertEqual(response.status_code, 200)
+
+    def test_done_page_uses_correct_template(self):
+        self.client.force_login(self.user)
+        response = self.client.get(reverse("password_change_done"))
+        self.assertTemplateUsed(response, "registration/password_change_done.html")
+
+
+class NavbarTests(TestCase):
+
+    def setUp(self):
+        self.user = User.objects.create_user("testuser", "test@example.com", "Testpass123!")
+
+    def test_navbar_username_is_link_when_authenticated(self):
+        self.client.force_login(self.user)
+        response = self.client.get(reverse("profile"))
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, f'href="{reverse("profile")}"')
+        self.assertContains(response, self.user.username)
+
+    def test_navbar_shows_login_link_when_anonymous(self):
+        response = self.client.get(reverse("login"))
+        self.assertNotContains(response, f'href="{reverse("profile")}"')
+        self.assertNotContains(response, "testuser")
+        self.assertContains(response, f'href="{reverse("login")}"')

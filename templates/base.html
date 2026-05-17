@@ -73,7 +73,7 @@
                     </li>
                     {% if user.is_authenticated %}
                     <li class="nav-item">
-                        <span class="nav-link text-white opacity-75">{{ user.username }}</span>
+                        <a class="nav-link" href="{% url 'profile' %}">{{ user.username }}</a>
                     </li>
                     <li class="nav-item">
                         <form method="post" action="{% url 'logout' %}" class="d-inline">
