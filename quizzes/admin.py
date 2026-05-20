@@ -30,7 +30,10 @@ class QuestionInline(admin.TabularInline):
     extra = 0
     fields = ('text', 'order', 'question_type', 'dimension')
     show_change_link = True
-    verbose_name_plural = 'Questions — add dimensions first and save, then add questions here'
+    verbose_name_plural = (
+        'Questions — dimension is optional for Rank questions '
+        'whose answers link directly to a result category'
+    )
 
     def formfield_for_foreignkey(self, db_field, request, **kwargs):
         if db_field.name == 'dimension':
@@ -47,6 +50,7 @@ class QuizAdmin(SummernoteModelAdmin):
     summernote_fields = ('description',)
     inlines = [DimensionInline, ResultCategoryInline, QuestionInline]
     prepopulated_fields = {'slug': ('title',)}
+    fields = ('title', 'slug', 'description', 'result_label', 'is_published', 'published_date', 'article')
     list_display = ('title', 'is_published', 'published_date')
 
 
@@ -56,8 +60,11 @@ class DimensionResultInline(admin.TabularInline):
     verbose_name = 'Dimension Outcome Mapping'
     verbose_name_plural = (
         'Dimension Outcome Mappings — add one row per dimension; '
-        'choose which side (left or right) of that dimension triggers this result'
+        'choose which pole of that dimension triggers this result'
     )
+
+    class Media:
+        js = ('admin/js/dimension_side_labels.js',)
 
     def formfield_for_foreignkey(self, db_field, request, **kwargs):
         if db_field.name == 'dimension':
@@ -86,6 +93,36 @@ class ResultCategoryAdmin(SummernoteModelAdmin):
 class AnswerChoiceInline(admin.TabularInline):
     model = AnswerChoice
     extra = 1
+    fields = ('text', 'side', 'category')
+
+    def formfield_for_foreignkey(self, db_field, request, **kwargs):
+        if db_field.name == 'category':
+            question_id = request.resolver_match.kwargs.get('object_id')
+            if question_id:
+                try:
+                    quiz_id = Question.objects.values_list('quiz_id', flat=True).get(pk=question_id)
+                    kwargs['queryset'] = ResultCategory.objects.filter(quiz_id=quiz_id)
+                except Question.DoesNotExist:
+                    kwargs['queryset'] = ResultCategory.objects.none()
+            else:
+                kwargs['queryset'] = ResultCategory.objects.none()
+        return super().formfield_for_foreignkey(db_field, request, **kwargs)
+
+    def formfield_for_choice_field(self, db_field, request, **kwargs):
+        if db_field.name == 'side':
+            question_id = request.resolver_match.kwargs.get('object_id')
+            if question_id:
+                try:
+                    question = Question.objects.select_related('dimension').get(pk=question_id)
+                    if question.dimension:
+                        kwargs['choices'] = [
+                            ('', '---------'),
+                            ('left', question.dimension.left_name),
+                            ('right', question.dimension.right_name),
+                        ]
+                except Question.DoesNotExist:
+                    pass
+        return super().formfield_for_choice_field(db_field, request, **kwargs)
 
 
 @admin.register(Question)
@@ -93,6 +130,7 @@ class QuestionAdmin(admin.ModelAdmin):
     inlines = [AnswerChoiceInline]
     list_display = ('text', 'quiz', 'question_type', 'dimension', 'order')
     list_filter = ('quiz', 'question_type')
+    list_select_related = ('quiz', 'dimension')
 
 
 @admin.register(QuizAttempt)

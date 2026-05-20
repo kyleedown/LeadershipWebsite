@@ -44,6 +44,20 @@
              id="rank-input-{{ question.id }}">
 
       {% elif question.question_type == 'slider' %}
+      {% with choices=question.choices.all %}
+      {% if choices %}
+      {# Choice-based stepped slider — each tick maps to an answer choice #}
+      <div class="d-flex justify-content-between small mb-1 gap-1">
+        {% for choice in choices %}
+        <span class="text-center lh-sm" style="flex:1;color:{% if forloop.first %}#7c3aed{% elif forloop.last %}#3b0764{% else %}#6b7280{% endif %};">
+          {{ choice.text }}
+        </span>
+        {% endfor %}
+      </div>
+      <input type="range" class="form-range" min="-100" max="100" step="50" value="0"
+             name="slider_{{ question.id }}" id="slider-{{ question.id }}">
+      {% else %}
+      {# Continuous slider with dimension pole labels #}
       <div class="d-flex justify-content-between small mb-1">
         <span style="color:#7c3aed;font-weight:600;">← {{ question.dimension.left_label }}</span>
         <span class="text-muted">Neutral</span>
@@ -58,6 +72,8 @@
       <div class="d-flex justify-content-between small text-muted mt-1 px-1">
         <span>−1.0</span><span>−0.5</span><span>0</span><span>+0.5</span><span>+1.0</span>
       </div>
+      {% endif %}
+      {% endwith %}
       {% endif %}
 
     </div>

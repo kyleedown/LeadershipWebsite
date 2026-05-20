@@ -9,6 +9,9 @@ class Quiz(models.Model):
     description = models.TextField(blank=True)
     is_published = models.BooleanField(default=False)
     published_date = models.DateTimeField(default=timezone.now)
+    result_label = models.CharField(
+        max_length=100, blank=True, default='Your Leadership Style',
+    )
     article = models.ForeignKey(
         'content.Article', null=True, blank=True,
         on_delete=models.SET_NULL, related_name='quizzes',
@@ -76,7 +79,10 @@ class Question(models.Model):
     text = models.TextField()
     order = models.PositiveIntegerField(default=0)
     question_type = models.CharField(max_length=6, choices=QUESTION_TYPES)
-    dimension = models.ForeignKey(Dimension, on_delete=models.CASCADE, related_name='questions')
+    dimension = models.ForeignKey(
+        Dimension, null=True, blank=True,
+        on_delete=models.CASCADE, related_name='questions',
+    )
 
     class Meta:
         ordering = ['order']
@@ -88,7 +94,15 @@ class Question(models.Model):
 class AnswerChoice(models.Model):
     question = models.ForeignKey(Question, on_delete=models.CASCADE, related_name='choices')
     text = models.CharField(max_length=200)
-    side = models.CharField(max_length=5, choices=[('left', 'Left'), ('right', 'Right')])
+    side = models.CharField(
+        max_length=5, choices=[('left', 'Left'), ('right', 'Right')],
+        blank=True, default='',
+    )
+    category = models.ForeignKey(
+        ResultCategory, null=True, blank=True,
+        on_delete=models.SET_NULL, related_name='answer_choices',
+    )
+    points = models.PositiveSmallIntegerField(default=1)
 
     class Meta:
         ordering = ['id']

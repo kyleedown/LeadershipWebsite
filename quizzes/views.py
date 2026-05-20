@@ -1,6 +1,8 @@
 from itertools import product as iterproduct
 
+from django.contrib.admin.views.decorators import staff_member_required
 from django.db import transaction
+from django.http import JsonResponse
 from django.shortcuts import get_object_or_404, redirect, render
 from django.urls import reverse
 
@@ -12,12 +14,10 @@ from .models import (
 
 
 def compute_scores(questions, post_data):
-    scores = {}
-    for question in questions:
-        dim_id = question.dimension_id
-        if dim_id not in scores:
-            scores[dim_id] = {'left': 0.0, 'right': 0.0}
+    dimension_scores = {}
+    category_scores = {}
 
+    for question in questions:
         if question.question_type == Question.RANK:
             order_str = post_data.get(f'rank_{question.id}', '')
             if not order_str:
@@ -33,20 +33,41 @@ def compute_scores(questions, post_data):
                 if not choice:
                     continue
                 points = n - rank_pos + 1
-                scores[dim_id][choice.side] += points
+                if choice.category_id:
+                    category_scores[choice.category_id] = (
+                        category_scores.get(choice.category_id, 0) + points
+                    )
+                elif question.dimension_id and choice.side:
+                    dim_id = question.dimension_id
+                    if dim_id not in dimension_scores:
+                        dimension_scores[dim_id] = {'left': 0.0, 'right': 0.0}
+                    dimension_scores[dim_id][choice.side] += points
 
-        elif question.question_type == Question.SLIDER:
+        elif question.question_type == Question.SLIDER and question.dimension_id:
+            dim_id = question.dimension_id
             try:
                 raw = max(-100, min(100, int(post_data.get(f'slider_{question.id}', 0))))
             except (ValueError, TypeError):
                 raw = 0
-            value = raw / 100.0
-            if value > 0:
-                scores[dim_id]['right'] += value
-            elif value < 0:
-                scores[dim_id]['left'] += abs(value)
+            if dim_id not in dimension_scores:
+                dimension_scores[dim_id] = {'left': 0.0, 'right': 0.0}
+            choices = list(question.choices.all())
+            if choices:
+                # Snap slider value to the nearest choice by position index.
+                # Choices are ordered: index 0 = leftmost, index n-1 = rightmost.
+                n = len(choices)
+                idx = round((raw + 100) / 200 * (n - 1))
+                choice = choices[max(0, min(n - 1, idx))]
+                if choice.side:
+                    dimension_scores[dim_id][choice.side] += choice.points
+            else:
+                value = raw / 100.0
+                if value > 0:
+                    dimension_scores[dim_id]['right'] += value
+                elif value < 0:
+                    dimension_scores[dim_id]['left'] += abs(value)
 
-    return scores
+    return dimension_scores, category_scores
 
 
 def determine_winners(scores):
@@ -107,9 +128,33 @@ def quiz_detail(request, slug):
     )
 
     if request.method == 'POST':
-        scores = compute_scores(questions, request.POST)
-        winners = determine_winners(scores)
-        result_categories = find_result_categories(quiz, winners)
+        dimension_scores, category_scores = compute_scores(questions, request.POST)
+
+        if category_scores and not dimension_scores:
+            # Pure category mode: highest-scoring category wins.
+            ordered_ids = sorted(category_scores, key=lambda k: category_scores[k], reverse=True)
+            all_ranked = [
+                rc
+                for cat_id in ordered_ids
+                for rc in [ResultCategory.objects.filter(id=cat_id).first()]
+                if rc
+            ]
+            # Only surface a runner-up if scores are genuinely tied at the top.
+            top_score = category_scores.get(ordered_ids[0], 0) if ordered_ids else 0
+            second_score = category_scores.get(ordered_ids[1], 0) if len(ordered_ids) > 1 else -1
+            result_categories = all_ranked if top_score == second_score else all_ranked[:1]
+        elif category_scores and dimension_scores:
+            # Mixed: filter by dimension outcomes, then rank survivors by category score.
+            winners = determine_winners(dimension_scores)
+            candidates = find_result_categories(quiz, winners)
+            result_categories = sorted(
+                candidates,
+                key=lambda rc: category_scores.get(rc.id, 0),
+                reverse=True,
+            )
+        else:
+            winners = determine_winners(dimension_scores)
+            result_categories = find_result_categories(quiz, winners)
 
         if not result_categories:
             return render(request, 'quizzes/quiz_detail.html', {
@@ -122,7 +167,7 @@ def quiz_detail(request, slug):
         secondary = result_categories[1] if len(result_categories) > 1 else None
 
         request.session[f'quiz_{quiz.id}_scores'] = {
-            str(dim_id): s for dim_id, s in scores.items()
+            str(dim_id): s for dim_id, s in dimension_scores.items()
         }
 
         if request.user.is_authenticated:
@@ -139,7 +184,7 @@ def quiz_detail(request, slug):
                         left_score=s['left'],
                         right_score=s['right'],
                     )
-                    for dim_id, s in scores.items()
+                    for dim_id, s in dimension_scores.items()
                 ])
 
         url = reverse('quiz_result', kwargs={'slug': quiz.slug, 'result_slug': primary.slug})
@@ -197,3 +242,15 @@ def quiz_result(request, slug, result_slug):
         'score_data': score_data,
         'also_category': also_category,
     })
+
+
+@staff_member_required
+def dimension_names_api(request):
+    dim_id = request.GET.get('dimension_id')
+    if not dim_id:
+        return JsonResponse({}, status=400)
+    try:
+        dim = Dimension.objects.get(pk=dim_id)
+    except Dimension.DoesNotExist:
+        return JsonResponse({}, status=404)
+    return JsonResponse({'left': dim.left_name, 'right': dim.right_name})
