@@ -10,6 +10,7 @@ from .models import (
 )
 
 
+
 def compute_scores(questions, post_data):
     scores = {}
     for question in questions:
