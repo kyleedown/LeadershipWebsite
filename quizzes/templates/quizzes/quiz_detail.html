@@ -1,0 +1,110 @@
+{% extends "base.html" %}
+
+{% block title %}{{ quiz.title }} — Leadership Studies{% endblock %}
+
+{% block extra_css %}
+<style>
+  .drag-handle { cursor: grab; user-select: none; }
+  .drag-handle:active { cursor: grabbing; }
+  .sortable-ghost { opacity: 0.4; background: #f3e8ff; }
+</style>
+{% endblock %}
+
+{% block content %}
+<h1 class="mb-2">{{ quiz.title }}</h1>
+{% if quiz.description %}
+<div class="mb-4">{{ quiz.description|safe }}</div>
+{% endif %}
+
+{% if error %}
+<div class="alert alert-danger">{{ error }}</div>
+{% endif %}
+
+<form method="post" id="quiz-form">
+  {% csrf_token %}
+
+  {% for question in questions %}
+  <div class="card mb-4 shadow-sm">
+    <div class="card-body">
+      <p class="fw-bold mb-3">{{ forloop.counter }}. {{ question.text }}</p>
+
+      {% if question.question_type == 'rank' %}
+      <p class="text-muted small mb-2">Drag to rank — 1st = most like you</p>
+      <ul class="list-group sortable-list mb-2" id="rank-list-{{ question.id }}">
+        {% for choice in question.choices.all %}
+        <li class="list-group-item d-flex align-items-center gap-2"
+            data-choice-id="{{ choice.id }}">
+          <span class="drag-handle text-muted fs-5">&#8286;</span>
+          <span class="rank-badge badge bg-secondary">{{ forloop.counter }}</span>
+          <span>{{ choice.text }}</span>
+        </li>
+        {% endfor %}
+      </ul>
+      <input type="hidden" name="rank_{{ question.id }}"
+             id="rank-input-{{ question.id }}">
+
+      {% elif question.question_type == 'slider' %}
+      <div class="d-flex justify-content-between small mb-1">
+        <span style="color:#7c3aed;font-weight:600;">← {{ question.dimension.left_label }}</span>
+        <span class="text-muted">Neutral</span>
+        <span style="color:#3b0764;font-weight:600;">{{ question.dimension.right_label }} →</span>
+      </div>
+      <input type="range" class="form-range" min="-100" max="100" step="1" value="0"
+             name="slider_{{ question.id }}" id="slider-{{ question.id }}"
+             oninput="updateSliderDisplay('{{ question.id }}', this.value)">
+      <div class="text-center small text-muted mt-1">
+        <span id="slider-val-{{ question.id }}">0 (neutral)</span>
+      </div>
+      <div class="d-flex justify-content-between small text-muted mt-1 px-1">
+        <span>−1.0</span><span>−0.5</span><span>0</span><span>+0.5</span><span>+1.0</span>
+      </div>
+      {% endif %}
+
+    </div>
+  </div>
+  {% endfor %}
+
+  <button type="submit" class="btn btn-dark btn-lg mt-2">Submit Quiz</button>
+</form>
+{% endblock %}
+
+{% block extra_js %}
+<script src="https://cdn.jsdelivr.net/npm/sortablejs@1.15.0/Sortable.min.js"></script>
+<script>
+const ORDINALS = ['1st','2nd','3rd','4th','5th','6th'];
+
+function updateRankOrder(list) {
+  const qId = list.id.replace('rank-list-', '');
+  const items = list.querySelectorAll('[data-choice-id]');
+  const ids = Array.from(items).map(el => el.dataset.choiceId);
+  document.getElementById('rank-input-' + qId).value = ids.join(',');
+  items.forEach((el, i) => {
+    el.querySelector('.rank-badge').textContent = ORDINALS[i] || String(i + 1);
+  });
+}
+
+document.querySelectorAll('.sortable-list').forEach(list => {
+  Sortable.create(list, {
+    handle: '.drag-handle',
+    animation: 150,
+    ghostClass: 'sortable-ghost',
+    onSort: () => updateRankOrder(list),
+  });
+  updateRankOrder(list);
+});
+
+function updateSliderDisplay(qId, val) {
+  const v = parseInt(val);
+  const text = v === 0 ? '0 (neutral)' : v > 0 ? '+' + (v / 100).toFixed(2) : (v / 100).toFixed(2);
+  document.getElementById('slider-val-' + qId).textContent = text;
+}
+
+document.getElementById('quiz-form').addEventListener('submit', function(e) {
+  const unanswered = Array.from(document.querySelectorAll('input[type="range"]'))
+    .some(s => parseInt(s.value) === 0);
+  if (unanswered && !confirm('Some questions are at neutral. Submit anyway?')) {
+    e.preventDefault();
+  }
+});
+</script>
+{% endblock %}

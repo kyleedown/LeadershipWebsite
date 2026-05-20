@@ -1,0 +1,29 @@
+{% extends "base.html" %}
+
+{% block title %}Quizzes — Leadership Studies{% endblock %}
+
+{% block content %}
+<h1 class="mb-4">Quizzes</h1>
+
+{% if quizzes %}
+  <div class="row row-cols-1 row-cols-md-2 g-4">
+    {% for quiz in quizzes %}
+    <div class="col">
+      <div class="card h-100 shadow-sm">
+        <div class="card-body">
+          <h5 class="card-title">{{ quiz.title }}</h5>
+          {% if quiz.description %}
+          <p class="card-text text-muted">{{ quiz.description|striptags|truncatewords:30 }}</p>
+          {% endif %}
+        </div>
+        <div class="card-footer bg-transparent border-0 pb-3">
+          <a href="{% url 'quiz_detail' quiz.slug %}" class="btn btn-dark">Take Quiz</a>
+        </div>
+      </div>
+    </div>
+    {% endfor %}
+  </div>
+{% else %}
+  <p class="text-muted">No quizzes published yet.</p>
+{% endif %}
+{% endblock %}

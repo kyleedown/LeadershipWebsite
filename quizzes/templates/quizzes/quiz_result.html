@@ -1,0 +1,96 @@
+{% extends "base.html" %}
+
+{% block title %}{{ result_category.name }} — {{ quiz.title }} — Leadership Studies{% endblock %}
+
+{% block content %}
+<h1 class="mb-4">Your Results</h1>
+
+<!-- Result category card -->
+<div class="card mb-4 shadow-sm" style="border:2px solid #3b0764;">
+  <div class="card-body">
+    <p class="text-uppercase fw-bold small mb-1" style="color:#7c3aed;letter-spacing:.05em;">
+      Your Leadership Style
+    </p>
+    <h2 class="mb-3" style="color:#3b0764;">{{ result_category.name }}</h2>
+    <div>{{ result_category.description|safe }}</div>
+    {% if result_category.article_1 or result_category.article_2 %}
+    <div class="mt-3 d-flex gap-2 flex-wrap">
+      {% if result_category.article_1 %}
+      <a href="{{ result_category.article_1.get_absolute_url }}"
+         class="btn btn-dark btn-sm">
+        Read more: {{ result_category.article_1.title }} &rarr;
+      </a>
+      {% endif %}
+      {% if result_category.article_2 %}
+      <a href="{{ result_category.article_2.get_absolute_url }}"
+         class="btn btn-outline-dark btn-sm">
+        {{ result_category.article_2.title }} &rarr;
+      </a>
+      {% endif %}
+    </div>
+    {% endif %}
+  </div>
+</div>
+
+<!-- Dimension scores -->
+{% if score_data %}
+<div class="card mb-4 shadow-sm">
+  <div class="card-body">
+    <h5 class="fw-bold mb-4">Your Dimension Scores</h5>
+    {% for score in score_data %}
+    <div class="mb-4">
+      <div class="d-flex justify-content-between small mb-1">
+        <span {% if score.winner == 'left' %}class="fw-bold" style="color:#3b0764;"
+              {% else %}class="text-muted"{% endif %}>
+          {{ score.dimension.left_name }}{% if score.winner == 'left' %} &#10003;{% endif %}
+        </span>
+        <span {% if score.winner == 'right' %}class="fw-bold" style="color:#3b0764;"
+              {% else %}class="text-muted"{% endif %}>
+          {{ score.dimension.right_name }}{% if score.winner == 'right' %} &#10003;{% endif %}
+        </span>
+      </div>
+      <div style="position:relative;height:10px;background:#f0e6ff;border-radius:5px;overflow:hidden;">
+        {% if score.winner == 'right' %}
+        <div style="position:absolute;left:50%;top:0;height:10px;
+                    width:{{ score.bar_pct }}%;background:#3b0764;
+                    border-radius:0 5px 5px 0;"></div>
+        {% elif score.winner == 'left' %}
+        <div style="position:absolute;right:50%;top:0;height:10px;
+                    width:{{ score.bar_pct }}%;background:#7c3aed;
+                    border-radius:5px 0 0 5px;"></div>
+        {% endif %}
+      </div>
+      <div class="d-flex justify-content-between small text-muted mt-1 px-1">
+        <span>−</span><span>0</span><span>+</span>
+      </div>
+      <div class="text-end small fw-semibold mt-1" style="color:#3b0764;">
+        {% if score.net >= 0 %}+{% endif %}{{ score.net|floatformat:2 }}
+      </div>
+    </div>
+    {% endfor %}
+  </div>
+</div>
+{% endif %}
+
+<!-- Tie notice -->
+{% if also_category %}
+<div class="mb-4 p-3" style="border:1px solid #f59e0b;border-radius:.5rem;background:#fffbeb;">
+  <p class="fw-bold mb-2" style="color:#92400e;">&#9878; Tie detected</p>
+  <p class="small mb-2" style="color:#78350f;">
+    Your scores tied on one or more dimensions. You may identify with both result types:
+  </p>
+  <div class="d-flex gap-2 flex-wrap">
+    <a href="{% url 'quiz_result' quiz.slug result_category.slug %}"
+       class="btn btn-sm" style="border:1px solid #92400e;color:#92400e;">
+      {{ result_category.name }}
+    </a>
+    <a href="{% url 'quiz_result' quiz.slug also_category.slug %}?also={{ result_category.slug }}"
+       class="btn btn-sm" style="border:1px solid #92400e;color:#92400e;">
+      {{ also_category.name }} &rarr;
+    </a>
+  </div>
+</div>
+{% endif %}
+
+<a href="{% url 'quiz_detail' quiz.slug %}" class="btn btn-outline-dark mt-2">Retake Quiz</a>
+{% endblock %}
